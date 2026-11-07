@@ -1,0 +1,22 @@
+{
+  "id": "neodex.mineur",
+  "name": "Mineur",
+  "version": "1.0.0",
+  "author": "NDesumeur",
+  "description": "Creuse toujours plus bas avec ta foreuse, remonte les minerais, vends-les à la surface et améliore ta machine. Gare au carburant et à la lave.",
+  "icon": "icon.png",
+  "entry": "index.js",
+  "view": "mineur",
+  "neobase": ">=4.0.0",
+  "type": "app",
+  "category": "Jeux",
+  "syncMode": "progression",
+  "syncInfo": "Profondeur record, plus riche.",
+  "mobile": false,
+  "system": false,
+  "dependencies": {},
+  "sdk": "2.1.0",
+  "permissions": [
+    "storage"
+  ]
+}
