@@ -1,0 +1,9 @@
+{
+  "pluginId": "neodex.mineur",
+  "repo": "NDesumeur/neodex-plugin-mineur",
+  "version": "1.0.0",
+  "sha256": "ee7be3742118f938f05d6283079568282b24dad3406efeaf5a822f2379c87b2c",
+  "approvedAt": "2026-11-07T17:30:59.725Z",
+  "neobase": ">=4.0.0",
+  "signature": "/U7v89rxX7q+mYFHxtxsIwp2XaVYSMiffrFAbjsm3lqR3jCNbnH+HxI+F3IYpbOoA0x1BS1gJ39Pxcp49FAbBQ=="
+}
