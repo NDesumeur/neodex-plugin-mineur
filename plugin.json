@@ -1,7 +1,7 @@
 {
   "id": "neodex.mineur",
   "name": "Mineur",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "NDesumeur",
   "description": "Jeu de forage : creuse à gauche, à droite ou vers le bas dans une mine de 87 mètres tirée au hasard, ramasse cuivre, fer, argent, or, rubis et saphir, de plus en plus précieux en profondeur, et remonte les vendre à la surface où le plein se fait tout seul. Améliore réservoir, soute et foret pour la roche dure ; la lave et la panne sèche coûtent ta soute.",
   "icon": "icon.png",
