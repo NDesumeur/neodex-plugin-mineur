@@ -3,7 +3,7 @@
   "name": "Mineur",
   "version": "1.0.0",
   "author": "NDesumeur",
-  "description": "Creuse toujours plus bas avec ta foreuse, remonte les minerais, vends-les à la surface et améliore ta machine. Gare au carburant et à la lave.",
+  "description": "Jeu de forage : creuse à gauche, à droite ou vers le bas dans une mine de 87 mètres tirée au hasard, ramasse cuivre, fer, argent, or, rubis et saphir, de plus en plus précieux en profondeur, et remonte les vendre à la surface où le plein se fait tout seul. Améliore réservoir, soute et foret pour la roche dure ; la lave et la panne sèche coûtent ta soute.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "mineur",
