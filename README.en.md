@@ -11,14 +11,16 @@ A drilling game: dig down into the ground with your drill rig, collect ores, bri
 - **Mouse** or **touch**: click on one side of the rig to go that way.
 - **1**, **2**, **3** or the buttons below the game: buy an upgrade (at the surface only).
 - **New game**: a new, randomly generated underground.
+- **Full screen**: the button of the same name; Escape to leave it. Otherwise the mine takes all the room the window leaves, big screens included.
 
 ## The underground
 
-The mine is 20 tiles wide and 87 metres deep. It contains:
+The mine is 20 tiles wide and **240 metres** deep. It contains:
 
 - **dirt**, quick to dig, costing 1 fuel;
 - **hard rock**, more common the deeper you go: it costs 3 fuel with the starting drill, 2 at level 2, 1 at level 3, and takes longer;
-- **lava**, from 30 metres down: entering it sends you back to the surface;
+- **black rock**, below 100 metres: you need at least a level 3 drill to break it (6 fuel at level 3 down to 2 at level 5);
+- **lava**, from 30 metres down and more and more common: entering it sends you back to the surface;
 - **empty pockets**, where the rig falls;
 - **ores**, more valuable the deeper you go.
 
@@ -30,6 +32,13 @@ The mine is 20 tiles wide and 87 metres deep. It contains:
 | Gold | $70 | 35 m |
 | Ruby | $160 | 55 m |
 | Sapphire | $320 | 72 m |
+| Emerald | $600 | 92 m |
+| Amethyst | $1,100 | 120 m |
+| Diamond | $2,000 | 150 m |
+| Mithril | $3,500 | 185 m |
+| Starstone | $6,000 | 215 m |
+
+The precious stones at the bottom twinkle. On the way down the earth changes five times, and a message announces each new layer: **the earth**, **the red clay** (45 m), **the blue stone** (90 m), **the crystals** (150 m) and **the heart of the world** (200 m).
 
 ## The surface
 
@@ -38,8 +47,12 @@ When you get back to the surface, the whole hold is sold at once and the tank re
 ## Upgrades
 
 - **Tank**: +30 fuel (start: 60). Price: $40 + $2 per current tank unit.
-- **Hold**: +4 slots (start: 8). Price: $30 + $6 per current slot. A full hold refuses further ores.
-- **Drill**: level 2 then 3, for hard rock. Price: $150 at level 1, $600 at level 2.
+- **Hold**: +4 slots (start: 8, 24 at most). Price: $30 + $6 per current slot. A full hold refuses further ores.
+- **Drill**: from level 2 to level 5, for hard rock then black rock. Price: $150 × current level squared ($150, $600, $1,350 then $2,400).
+
+## Sounds
+
+The drill grinds while it digs, deeper in hard rock; each ore you pick up chimes by its value. At the surface, a coin rings for each ore sold, then the cash register, and the refill goes glug-glug.
 
 ## Rescue
 

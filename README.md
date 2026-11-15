@@ -11,14 +11,16 @@ Un jeu de forage : descends dans le sol avec ta foreuse, ramasse les minerais, r
 - **Souris** ou **toucher** : clique d'un côté du véhicule pour aller dans cette direction.
 - **1**, **2**, **3** ou les boutons sous le jeu : acheter une amélioration (à la surface seulement).
 - **Nouvelle partie** : un nouveau sous-sol, tiré au hasard.
+- **Plein écran** : le bouton du même nom ; Échap pour en sortir. Hors plein écran, la mine prend toute la place que laisse la fenêtre, aussi sur grand écran.
 
 ## Le sous-sol
 
-La mine fait 20 cases de large et 87 mètres de profondeur. On y trouve :
+La mine fait 20 cases de large et **240 mètres** de profondeur. On y trouve :
 
 - de la **terre**, qui se creuse vite et coûte 1 de carburant ;
 - de la **roche dure**, de plus en plus fréquente en profondeur : elle coûte 3 de carburant avec le foret de départ, 2 au niveau 2, 1 au niveau 3, et prend plus de temps ;
-- de la **lave**, à partir de 30 mètres : y entrer renvoie à la surface ;
+- de la **roche noire**, sous 100 mètres : il faut un foret 3 au moins pour l'attaquer (6 de carburant au niveau 3 jusqu'à 2 au niveau 5) ;
+- de la **lave**, à partir de 30 mètres et de plus en plus fréquente : y entrer renvoie à la surface ;
 - des **poches vides**, où la foreuse tombe ;
 - des **minerais**, plus précieux à mesure qu'on descend.
 
@@ -30,6 +32,13 @@ La mine fait 20 cases de large et 87 mètres de profondeur. On y trouve :
 | Or | 70 $ | 35 m |
 | Rubis | 160 $ | 55 m |
 | Saphir | 320 $ | 72 m |
+| Émeraude | 600 $ | 92 m |
+| Améthyste | 1 100 $ | 120 m |
+| Diamant | 2 000 $ | 150 m |
+| Mithril | 3 500 $ | 185 m |
+| Étoilite | 6 000 $ | 215 m |
+
+Les pierres précieuses du fond scintillent. En descendant, la terre change cinq fois, et un message annonce chaque nouvelle couche : **la terre**, **l'argile rouge** (45 m), **la pierre bleue** (90 m), **les cristaux** (150 m) et **le cœur du monde** (200 m).
 
 ## La surface
 
@@ -38,8 +47,12 @@ En remontant à la surface, toute la soute se vend d'un coup et le plein se fait
 ## Améliorations
 
 - **Réservoir** : +30 de carburant (départ : 60). Prix : 40 $ + 2 $ par unité de réservoir actuelle.
-- **Soute** : +4 places (départ : 8). Prix : 30 $ + 6 $ par place actuelle. Une soute pleine refuse les minerais suivants.
-- **Foret** : niveau 2 puis 3, pour la roche dure. Prix : 150 $ au niveau 1, 600 $ au niveau 2.
+- **Soute** : +4 places (départ : 8, 24 au plus). Prix : 30 $ + 6 $ par place actuelle. Une soute pleine refuse les minerais suivants.
+- **Foret** : du niveau 2 au niveau 5, pour la roche dure puis la roche noire. Prix : 150 $ × niveau actuel au carré (150, 600, 1 350 puis 2 400 $).
+
+## Les sons
+
+Le foret gratte pendant qu'il creuse, plus grave dans la roche dure ; chaque minerai ramassé tinte selon sa valeur. À la surface, une pièce sonne par minerai vendu, puis la caisse, et le plein fait glou-glou.
 
 ## Les secours
 

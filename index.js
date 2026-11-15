@@ -5,19 +5,21 @@ const HTML = `<div class="appWrap wide">
   <div class="gMain"><div class="gameBox"><canvas id="gc" width="240" height="204"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="gStats"></div></div>
-      <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button></div>
+      <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button><button class="btn" id="gFs">PLEIN ÉCRAN</button></div>
       <div class="row"><button class="btn" id="mnUp0">RÉSERVOIR</button><button class="btn" id="mnUp1">SOUTE</button></div><div class="row"><button class="btn" id="mnUp2">FORET</button></div>
-      <div class="hint">À la surface, tout se vend et le plein se fait tout seul.</div><div class="hint">Plus on descend, plus les minerais valent cher : cuivre, fer, argent, or, rubis, saphir. La roche dure demande un meilleur foret, la lave renvoie à la surface en perdant la soute.</div>
+      <div class="hint">À la surface, tout se vend et le plein se fait tout seul.</div><div class="hint">Plus on descend, plus les minerais valent cher : cuivre, fer, argent, or, rubis, saphir, puis sous 90 m émeraude, améthyste, diamant, mithril et étoilite. La roche dure demande un meilleur foret, la roche noire (sous 100 m) un foret 3 au moins ; la lave renvoie à la surface en perdant la soute.</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
-.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2;min-width:320px;position:relative}
+.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2 1 560px;min-width:min(100%,560px);position:relative}
 .gameBox canvas{width:100%;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
 .gSide{display:flex;flex-direction:column;gap:14px;flex:1;min-width:250px;max-width:420px}
 .gSide .sysCard{display:flex;flex-direction:column}
 .gStats{display:grid;grid-template-columns:1fr auto;gap:4px 14px}
 .gStats b{text-align:right}
-.gameBox canvas{max-width:560px;aspect-ratio:240/204}`;
+.gameBox canvas{width:min(100%,max(320px,calc((100vh - 190px) * 240 / 204)));height:auto;aspect-ratio:240/204}
+.gameBox:fullscreen{padding:0}
+.gameBox:fullscreen canvas{width:min(100vw,calc(100vh * 240 / 204))}`;
 /* ---------- l'habillage pixel art, dessiné à la main : police bitmap (accents compris), cadres, boutons, icônes ----------
    Tout est en pixels pleins, agrandis par 2 sans lissage : aucun dégradé, aucune ombre floue. */
 const PXK = (() => {
@@ -326,40 +328,59 @@ const W = 240, H = 204, cv = $('gc'), g = cv.getContext('2d'); g.imageSmoothingE
 const cpos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
 let actx = null;
 const beep = (f, d = .1, type = 'square', slide = 0, vol = .08) => { try { actx ??= new AudioContext(); const o = actx.createOscillator(), gn = actx.createGain(), t = actx.currentTime; o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d); gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(gn).connect(actx.destination); o.start(t); o.stop(t + d + .02); } catch {} };
+function mnNoise(d, vol = .05, freq = 900, at = 0) {  // un grain de bruit filtré : le foret qui gratte, la caisse
+  try { actx ??= new AudioContext(); const t = actx.currentTime + at, n = actx.createBufferSource(), buf = actx.createBuffer(1, Math.ceil(actx.sampleRate * d), actx.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / ch.length);
+    const f = actx.createBiquadFilter(), gn = actx.createGain(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.5; gn.gain.value = vol; n.buffer = buf; n.connect(f).connect(gn).connect(actx.destination); n.start(t); } catch {}
+}
+let mnSounds = 0;
+const mnGrind = hard => { mnSounds++; mnNoise(.07, .05 + hard * .012, 700 - hard * 120); beep(70 + hard * 12 + Math.random() * 20, .06, 'sawtooth', 0, .025); };  // plus la roche est dure, plus c'est grave
+function mnCashSound(n) {  // une pièce par minerai, de plus en plus aiguë, puis la caisse
+  mnSounds++;
+  for (let i = 0; i < Math.min(n, 10); i++) setTimeout(() => beep(1046 + i * 90, .05, 'square', 0, .035), i * 55);
+  const t = Math.min(n, 10) * 55 + 60; setTimeout(() => { mnNoise(.12, .06, 3200); beep(1568, .08, 'triangle', 0, .05); setTimeout(() => beep(2093, .2, 'triangle', 0, .05), 70); }, t);
+}
 const keyOk = e => view.classList.contains('on') && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName);
 const showStats = rows => $('gStats').replaceChildren(...rows.flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
 
 /* ---------- Mineur : creuser toujours plus bas, remonter les minerais, les vendre à la surface et améliorer sa machine. Gare au carburant et à la lave. ---------- */
-const MN = {T: 12, COLS: 20, ROWS: 90, SURF: 3, VIEW: 15};
-const MN_ORES = [{n: 'Cuivre', v: 5, c: '#e08a4a', d: 0}, {n: 'Fer', v: 12, c: '#c8c8d8', d: 8}, {n: 'Argent', v: 30, c: '#e8f0ff', d: 20}, {n: 'Or', v: 70, c: '#ffd84a', d: 35}, {n: 'Rubis', v: 160, c: '#ff4a6a', d: 55}, {n: 'Saphir', v: 320, c: '#5a8aff', d: 72}];
+const MN = {T: 12, COLS: 20, ROWS: 243, SURF: 3, VIEW: 15};  // 240 m de mine
+const MN_ORES = [{n: 'Cuivre', v: 5, c: '#e08a4a', d: 0}, {n: 'Fer', v: 12, c: '#c8c8d8', d: 8}, {n: 'Argent', v: 30, c: '#e8f0ff', d: 20}, {n: 'Or', v: 70, c: '#ffd84a', d: 35}, {n: 'Rubis', v: 160, c: '#ff4a6a', d: 55}, {n: 'Saphir', v: 320, c: '#5a8aff', d: 72},
+  {n: 'Émeraude', v: 600, c: '#3ae08a', d: 92}, {n: 'Améthyste', v: 1100, c: '#c86aff', d: 120}, {n: 'Diamant', v: 2000, c: '#d8ffff', d: 150}, {n: 'Mithril', v: 3500, c: '#7ae8e0', d: 185}, {n: 'Étoilite', v: 6000, c: '#ffe8a0', d: 215}];
+// les couches de la mine : la terre change de couleur en descendant (et un message l'annonce la première fois)
+const MN_LAYERS = [{d: 0, n: 'La terre', c: ['#6a4428', '#7a5030', '#55361e']}, {d: 45, n: 'L\'argile rouge', c: ['#6a3024', '#7a3a2a', '#52221a']}, {d: 90, n: 'La pierre bleue', c: ['#3a4058', '#465070', '#2c3046']},
+  {d: 150, n: 'Les cristaux', c: ['#3a2a58', '#4a3670', '#2a1e44']}, {d: 200, n: 'Le cœur du monde', c: ['#2a1a1a', '#3a2020', '#1e1010']}];
+const mnLayer = depth => MN_LAYERS.reduce((a, L, i) => depth >= L.d ? i : a, 0);
 const mns = gstore('mineur', {deep: 0, cash: 0});
 let mn = null;
-// 0 vide, 1 terre, 2 roche dure, 3 lave, 10+i minerai i
+// 0 vide, 1 terre, 2 roche dure, 3 lave, 4 roche noire (foret 3 au moins), 10+i minerai i
 function mnWorld(seed) {
   const r = seeded(seed), w = Array.from({length: MN.ROWS}, (_, y) => Array.from({length: MN.COLS}, () => y < MN.SURF ? 0 : 1));
   for (let y = MN.SURF + 1; y < MN.ROWS; y++) for (let x = 0; x < MN.COLS; x++) {
     const k = r(), depth = y - MN.SURF;
-    if (k < .04 + depth / 500) w[y][x] = 2; else if (depth > 30 && k < .06 + depth / 900) w[y][x] = 3; else if (k < .26) { const ok = MN_ORES.map((o, i) => [o, i]).filter(([o]) => depth >= o.d); const [, i] = ok[Math.floor(Math.pow(r(), .7) * ok.length)]; w[y][x] = 10 + i; }
+    const rock = Math.min(.04 + depth / 500, .22), lava = depth > 30 ? Math.min(.02 + depth / 1800, .1) : 0;  // la lave venait après la roche et n'apparaissait jamais : elle a maintenant sa part
+    if (k < rock) w[y][x] = depth >= 100 && r() < .5 ? 4 : 2; else if (k < rock + lava) w[y][x] = 3; else if (k < rock + lava + .24) { const ok = MN_ORES.map((o, i) => [o, i]).filter(([o]) => depth >= o.d); const [, i] = ok[Math.floor(Math.pow(r(), .7) * ok.length)]; w[y][x] = 10 + i; }
     if (k > .97) w[y][x] = 0;  // des poches vides
   }
   return w;
 }
 function mnNew() {
-  mn = Object.assign(mn || {tick: 0, raf: 0}, {mode: 'play', w: mnWorld(Math.floor(Math.random() * 1e9)), x: 4, y: MN.SURF - 1, fx: 4, fy: MN.SURF - 1, tank: 60, fuel: 60, hold: 8, bag: [], drill: 1, cash: 0, deep: 0, dig: null, msg: '', msgAt: -999, fall: 0, keys: {}, lastMove: 0, cam: 0});
+  mn = Object.assign(mn || {tick: 0, raf: 0}, {mode: 'play', w: mnWorld(Math.floor(Math.random() * 1e9)), x: 4, y: MN.SURF - 1, fx: 4, fy: MN.SURF - 1, tank: 60, fuel: 60, hold: 8, bag: [], drill: 1, cash: 0, deep: 0, dig: null, msg: '', msgAt: -999, fall: 0, keys: {}, lastMove: 0, cam: 0, layer: 0});
   mnInfo();
 }
 const mnSay = t => { mn.msg = t; mn.msgAt = mn.tick; };
-const MN_UP = [['Réservoir', 'tank', 30, t => 40 + t * 2], ['Soute', 'hold', 4, h => 30 + h * 6], ['Foret', 'drill', 1, d => 150 * d * d]];
+const MN_UP = [['Réservoir', 'tank', 30, t => 40 + t * 2], ['Soute', 'hold', 4, h => 30 + h * 6], ['Foret', 'drill', 1, d => 150 * d * d]], MN_DRILL = 5, MN_HOLD = 24;
 function mnBuy(i) {
   const [name, key, add, cost] = MN_UP[i], price = Math.round(cost(mn[key]));
-  if (key === 'drill' && mn.drill >= 3) return mnSay('Foret au maximum');
+  if (key === 'drill' && mn.drill >= MN_DRILL) return mnSay('Foret au maximum');
+  if (key === 'hold' && mn.hold >= MN_HOLD) return mnSay('Soute au maximum');
   if (mn.y >= MN.SURF) return mnSay('Les achats se font à la surface');
   if (mn.cash < price) return mnSay(name + ' : il faut ' + price + ' $');
   mn.cash -= price; mn[key] += add; if (key === 'tank') mn.fuel = mn.tank; beep(880, .1, 'triangle', 1320, .07); mnSay(name + ' amélioré !'); mnInfo();
 }
 function mnSurface() {  // à la surface : on vend tout et on refait le plein
-  if (mn.bag.length) { const v = mn.bag.reduce((a, i) => a + MN_ORES[i].v, 0); mn.cash += v; mnSay('Vendu : ' + v + ' $'); mn.bag = []; [660, 880].forEach((f, i) => setTimeout(() => beep(f, .08, 'triangle'), i * 80)); }
-  const need = Math.ceil(mn.tank - mn.fuel), pay = Math.min(need, mn.cash); if (pay > 0) { mn.cash -= pay; mn.fuel += pay; }
+  if (mn.bag.length) { const v = mn.bag.reduce((a, i) => a + MN_ORES[i].v, 0); mn.cash += v; mnSay('Vendu : ' + v + ' $'); mnCashSound(mn.bag.length); mn.bag = []; }
+  const need = Math.ceil(mn.tank - mn.fuel), pay = Math.min(need, mn.cash); if (pay > 0) { mn.cash -= pay; mn.fuel += pay; for (let i = 0; i < 4; i++) setTimeout(() => beep(180 + i * 40, .07, 'sine', 120, .04), 700 + i * 90); }  // le plein : glou-glou
   if (mn.fuel < 3 && mn.cash <= 0) mn.fuel = 20;  // jamais bloqué en haut sans rien
   if (mn.cash > mns.cash) mns.cash = mn.cash; saveGames(); mnInfo();
 }
@@ -371,24 +392,27 @@ function mnTry(dx, dy) {
   if (t === 0) { if (dy < 0) { if (mn.fuel < .5) return; mn.fuel -= .5; } mn.x = nx; mn.y = ny; return; }
   if (t === 3) { mn.w[ny][nx] = 0; return mnRescue('La lave'); }
   if (mn.fuel < 1) return mnRescue('Panne sèche');
-  const hard = t === 2 ? Math.max(1, 4 - mn.drill) : 1;
-  mn.dig = {x: nx, y: ny, n: 0, need: hard * 8}; mn.fuel -= hard;
+  if (t === 4 && mn.drill < 3) { beep(110, .12, 'square', 0, .05); return mnSay('Roche noire : il faut un foret 3'); }
+  const hard = t === 2 ? Math.max(1, 4 - mn.drill) : t === 4 ? Math.max(1, 7 - mn.drill) : 1;
+  mn.dig = {x: nx, y: ny, n: 0, need: hard * 8, hard}; mn.fuel -= hard;
 }
 function mnUpdate() {
   const m = mn;
-  if (m.dig) { if (++m.dig.n >= m.dig.need) { const t = m.w[m.dig.y][m.dig.x]; if (t >= 10) { if (m.bag.length < m.hold) { m.bag.push(t - 10); beep(700 + (t - 10) * 120, .05, 'square', 0, .05); } else mnSay('Soute pleine : remonte vendre'); } else beep(160 + Math.random() * 60, .03, 'square', 0, .04); m.w[m.dig.y][m.dig.x] = 0; m.x = m.dig.x; m.y = m.dig.y; m.dig = null; } }
+  if (m.dig) { if (m.dig.n % 5 === 0) mnGrind(m.dig.hard); if (++m.dig.n >= m.dig.need) { const t = m.w[m.dig.y][m.dig.x]; if (t >= 10) { if (m.bag.length < m.hold) { m.bag.push(t - 10); beep(600 + (t - 10) * 90, .05, 'square', 0, .05); beep(900 + (t - 10) * 120, .08, 'triangle', 0, .04); } else mnSay('Soute pleine : remonte vendre'); } else beep(160 + Math.random() * 60, .03, 'square', 0, .04); m.w[m.dig.y][m.dig.x] = 0; m.x = m.dig.x; m.y = m.dig.y; m.dig = null; } }
   else if (m.y + 1 < MN.ROWS && m.w[m.y + 1][m.x] === 0 && !m.keys.up) { if (++m.fall >= 4) { m.y++; m.fall = 0; } }
   else if (m.tick - m.lastMove >= 7) { const k = m.keys, d = k.left ? [-1, 0] : k.right ? [1, 0] : k.down ? [0, 1] : k.up ? [0, -1] : null; if (d) { mnTry(...d); m.lastMove = m.tick; } }
   m.fx += (m.x - m.fx) * .35; m.fy += (m.y - m.fy) * .35;
-  const depth = Math.max(0, m.y - MN.SURF + 1); if (depth > m.deep) { m.deep = depth; if (depth > mns.deep) { mns.deep = depth; saveGames(); } mnInfo(); }
+  const depth = Math.max(0, m.y - MN.SURF + 1), ly = mnLayer(depth); if (ly > m.layer) { m.layer = ly; mnSay(MN_LAYERS[ly].n + ' : ' + depth + ' m'); [392, 523, 659].forEach((f, i) => setTimeout(() => beep(f, .15, 'triangle', 0, .05), i * 110)); }
+  if (depth > m.deep) { m.deep = depth; if (depth > mns.deep) { mns.deep = depth; saveGames(); } mnInfo(); }
   if (m.y < MN.SURF && !m.wasUp) mnSurface(); m.wasUp = m.y < MN.SURF;
   if (m.fuel <= 0 && m.y >= MN.SURF && !m.dig) mnRescue('Panne sèche');
   m.cam += (Math.max(0, m.fy - 6) - m.cam) * .15;
 }
-const MN_DIRT = [0, 1, 2].map(v => cnv(12, 12, b => { const r = seeded(v + 3); px(b, '#6a4428', 0, 0, 12, 12); for (let i = 0; i < 12; i++) px(b, r() < .5 ? '#7a5030' : '#55361e', Math.floor(r() * 12), Math.floor(r() * 12), 2, 1); }));
+const MN_DIRTS = MN_LAYERS.map(L => [0, 1, 2].map(v => cnv(12, 12, b => { const r = seeded(v + 3); px(b, L.c[0], 0, 0, 12, 12); for (let i = 0; i < 12; i++) px(b, r() < .5 ? L.c[1] : L.c[2], Math.floor(r() * 12), Math.floor(r() * 12), 2, 1); }))), MN_DIRT = MN_DIRTS[0];
+const MN_BLACK = cnv(12, 12, b => { px(b, '#141018', 0, 0, 12, 12); px(b, '#2a2434', 1, 1, 4, 3); px(b, '#221c2c', 6, 5, 5, 6); px(b, '#05010b', 0, 4, 6, 1); px(b, '#05010b', 5, 4, 1, 8); px(b, '#4a4058', 2, 1, 1, 1); px(b, '#4a4058', 8, 6, 1, 1); });
 const MN_ROCK = cnv(12, 12, b => { px(b, '#4a4a5a', 0, 0, 12, 12); px(b, '#6a6a7a', 1, 1, 5, 4); px(b, '#5a5a6a', 6, 6, 5, 5); px(b, '#2a2a3a', 0, 5, 7, 1); px(b, '#2a2a3a', 6, 5, 1, 7); px(b, '#8a8a9a', 2, 1, 2, 1); });
 const MN_LAVA = [0, 1].map(f => cnv(12, 12, b => { px(b, '#c02a10', 0, 0, 12, 12); for (let i = 0; i < 6; i++) px(b, '#ffa030', (i * 5 + f * 3) % 11, (i * 7 + f * 2) % 11, 2, 1); px(b, '#ffe080', 3 + f * 4, 5, 1, 1); }));
-const MN_ORE = MN_ORES.map((o, i) => cnv(12, 12, b => { b.drawImage(MN_DIRT[i % 3], 0, 0); for (const [x, y] of [[2, 3], [7, 2], [4, 7], [8, 8]]) { px(b, '#05010b', x - 1, y - 1, 4, 4); px(b, o.c, x, y, 2, 2); px(b, '#ffffff', x, y, 1, 1); } }));
+const MN_ORE = MN_ORES.map((o, i) => cnv(12, 12, b => { const big = i >= 6; for (const [x, y] of big ? [[2, 2], [7, 3], [3, 7], [8, 8], [5, 5]] : [[2, 3], [7, 2], [4, 7], [8, 8]]) { px(b, '#05010b', x - 1, y - 1, 4, 4); px(b, o.c, x, y, 2, 2); px(b, '#ffffff', x, y, 1, 1); } if (big) { px(b, o.c, 5, 4, 1, 1); px(b, o.c, 4, 5, 1, 1); } }));  // les minerais profonds : cinq éclats
 const MN_RIG = spr(['...kkkk.....', '..kyyyyk....', '..kywwyk....', 'kkkyyyykkk..', 'kyyyyyyyyykk', 'kyoyyyyyyyGk', 'kkkkkkkkkkGk', '.kGk..kGk.k.', '.kkk..kkk...'], {k: '#05010b', y: '#ffd84a', w: '#8ad8ff', o: '#ff9a3d', G: '#8a8aa8'});
 function mnDraw() {
   const m = mn, oy = Math.round(m.cam * MN.T), r0 = Math.floor(m.cam), top = 22;
@@ -397,7 +421,10 @@ function mnDraw() {
     const t = m.w[ry][x], X = x * MN.T, Y = top + ry * MN.T - oy; if (Y > H || Y < top - MN.T) continue;
     if (ry < MN.SURF) { px(g, ry === MN.SURF - 1 ? '#2a3a6a' : '#1a2450', X, Y, MN.T, MN.T); continue; }
     if (t === 0) { px(g, '#120a06', X, Y, MN.T, MN.T); if (m.w[ry - 1]?.[x] && ry > MN.SURF) px(g, '#0a0604', X, Y, MN.T, 2); continue; }
-    g.drawImage(t === 1 ? MN_DIRT[(x * 7 + ry * 3) % 3] : t === 2 ? MN_ROCK : t === 3 ? MN_LAVA[Math.floor(m.tick / 15 + x) % 2] : MN_ORE[t - 10], X, Y);
+    const dirt = MN_DIRTS[mnLayer(ry - MN.SURF + 1)][(x * 7 + ry * 3) % 3];
+    if (t === 1 || t >= 10) g.drawImage(dirt, X, Y);
+    if (t >= 10) { g.drawImage(MN_ORE[t - 10], X, Y); if (t >= 16 && (m.tick + x * 13 + ry * 7) % 90 < 6) px(g, '#ffffff', X + 5, Y + 4, 1, 3), px(g, '#ffffff', X + 4, Y + 5, 3, 1); }  // les pierres précieuses scintillent
+    else if (t !== 1) g.drawImage(t === 2 ? MN_ROCK : t === 3 ? MN_LAVA[Math.floor(m.tick / 15 + x) % 2] : MN_BLACK, X, Y);
     if (ry === MN.SURF) px(g, '#3a8a3a', X, Y, MN.T, 3);
   }
   // la surface : la boutique et le dépôt de carburant
@@ -419,10 +446,24 @@ cv.onpointerdown = e => { e.preventDefault(); if (!mn) return; const [x, y] = cp
 cv.onpointerup = () => { if (mn) mn.keys = {}; };
 function mnInfo() {
   showStats([['Plus profond', mns.deep + ' m'], ['Plus riche', mns.cash + ' $'], ['Cette partie', mn ? mn.deep + ' m · ' + mn.cash + ' $' : '—']]);
-  if (!mn) return; MN_UP.forEach(([name, key, , cost], i) => { const b = $('mnUp' + i); b.textContent = name.toUpperCase() + ' · ' + (key === 'drill' && mn.drill >= 3 ? 'MAX' : Math.round(cost(mn[key])) + ' $'); });
+  if (!mn) return; MN_UP.forEach(([name, key, , cost], i) => { const b = $('mnUp' + i); b.textContent = name.toUpperCase() + ' · ' + (key === 'drill' && mn.drill >= MN_DRILL || key === 'hold' && mn.hold >= MN_HOLD ? 'MAX' : Math.round(cost(mn[key])) + ' $'); });
 }
 MN_UP.forEach((_, i) => $('mnUp' + i).onclick = () => { mnBuy(i); $('mnUp' + i).blur(); });
 $('gNew').onclick = () => { mnNew(); $('gNew').blur(); };
+$('gFs').onclick = () => { $('gFs').blur(); try { if (document.fullscreenElement) document.exitFullscreen(); else cv.parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
+function mnCheck() {  // vérification : la mine descend à 240 m, les nouveaux minerais restent au fond, la lave et la roche noire existent, la roche noire demande un foret 3
+  const bad = [], w = mnWorld(7), at = (y0, y1, f) => w.slice(y0 + MN.SURF, y1 + MN.SURF).flat().filter(f).length;
+  if (MN.ROWS - MN.SURF < 240) bad.push('profondeur');
+  if (at(0, 90, t => t >= 16)) bad.push('minerais neufs trop hauts');
+  for (let i = 6; i < MN_ORES.length; i++) if (!at(MN_ORES[i].d, 240, t => t === 10 + i)) bad.push('pas de ' + MN_ORES[i].n);
+  if (at(31, 240, t => t === 3) < 40) bad.push('lave'); if (at(0, 100, t => t === 4)) bad.push('roche noire trop haute'); if (!at(100, 240, t => t === 4)) bad.push('roche noire');
+  if (mnLayer(0) !== 0 || mnLayer(95) !== 2 || mnLayer(239) !== 4) bad.push('couches');
+  const keep = mn; mn = null; mnNew(); mn.y = 120; mn.x = 5; mn.w[121][5] = 4; mn.drill = 2; mnTry(0, 1); if (mn.dig) bad.push('roche noire au foret 2'); mn.drill = 3; mnTry(0, 1); if (!mn.dig || mn.dig.hard !== 4) bad.push('roche noire au foret 3'); mn = keep;
+  if (MN_HOLD > 24) bad.push('soute trop grande pour le tableau de bord');
+  return bad.length ? bad.join(', ') : 'ok';
+}
+console.assert(mnCheck() === 'ok', 'mineur', mnCheck());
+cv.__mn = {st: () => mn, check: mnCheck, sounds: () => mnSounds, layer: mnLayer, ores: MN_ORES};
 {  // vérification : le monde a de la terre sous la surface et des minerais plus chers en profondeur ; creuser coûte du carburant
   const w = mnWorld(5), deep = w.slice(70).flat().filter(t => t >= 10).map(t => MN_ORES[t - 10].v), top = w.slice(3, 12).flat().filter(t => t >= 10).map(t => MN_ORES[t - 10].v), avg = a => a.reduce((s, v) => s + v, 0) / a.length;
   const keep = mn; mn = null; mnNew(); const f0 = mn.fuel; mn.w[MN.SURF][4] = 1; mnTry(0, 1); const used = f0 - mn.fuel;
