@@ -1,7 +1,7 @@
 {
   "id": "neodex.mineur",
   "name": "Mineur",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "NDesumeur",
   "description": "Jeu de forage : creuse à gauche, à droite ou vers le bas dans une mine de 240 mètres tirée au hasard, à travers cinq couches de terre et de pierre. Ramasse cuivre, fer, argent, or, rubis, saphir, puis émeraude, améthyste, diamant, mithril et étoilite, de plus en plus précieux en profondeur, et remonte les vendre à la surface où le plein se fait tout seul. Améliore réservoir, soute et foret (jusqu'au niveau 5) pour la roche dure et la roche noire ; la lave et la panne sèche coûtent ta soute. Bruit du foret et de la caisse, plein écran.",
   "icon": "icon.png",
