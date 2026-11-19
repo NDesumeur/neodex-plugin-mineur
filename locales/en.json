@@ -70,7 +70,6 @@
  "Plus on descend, plus les minerais valent cher : cuivre, fer, argent, or, rubis, saphir, puis sous 90 m émeraude, améthyste, diamant, mithril et étoilite. La roche dure demande un meilleur foret, la roche noire (sous 100 m) un foret 3 au moins ; la lave renvoie à la surface en perdant la soute.": "The deeper you go, the more ores are worth: copper, iron, silver, gold, ruby, sapphire, then below 90 m emerald, amethyst, diamond, mithril and starstone. Hard rock needs a better drill, black rock (below 100 m) a level 3 drill at least; lava sends you back to the surface and loses your hold.",
  "Plus profond": "Deeper",
  "Plus riche": "Richer",
- "Profondeur record, plus riche.": "Record depth, richer.",
  "RECORDS": "RECORDS",
  "Roche noire : il faut un foret 3": "Black rock: you need a level 3 drill",
  "Rubis": "Ruby",
@@ -93,5 +92,6 @@
  "pas de": "no",
  "roche noire au foret 2": "black rock at drill 2",
  "roche noire au foret 3": "black rock at drill 3",
- "soute trop grande pour le tableau de bord": "hold too big for the dashboard"
+ "soute trop grande pour le tableau de bord": "hold too big for the dashboard",
+ "Rien n'est synchronisé : tes records restent sur cet appareil.": "Nothing is synced: your records stay on this device."
 }
