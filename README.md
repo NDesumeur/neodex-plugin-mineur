@@ -4,6 +4,16 @@ Un jeu de forage : descends dans le sol avec ta foreuse, ramasse les minerais, r
 
 *English version: [README.en.md](README.en.md)*
 
+## La boucle du mineur (nouveau en 1.2.0)
+
+- **Cinq améliorations** (touches 1 à 5, à la surface) : réservoir, soute, foret, et maintenant **coque** (les points de vie de la foreuse) et **moteur** (on roule et on creuse plus vite, jusqu'au niveau 4).
+- **Les dangers** abîment la coque : des **poches de gaz** cachées dans la terre (de petites bulles vertes les trahissent, -25), des **rochers** qui tremblent puis tombent quand on creuse dessous (-30), et les **chutes** de plus de trois cases. Coque à zéro : les secours remontent la foreuse, la soute est perdue.
+- **La vente détaillée** : en remontant, un tableau donne chaque minerai vendu, le total, le bonus, et l'amélioration la moins chère à acheter ensuite (en vert si elle est à portée). Les réparations se font toutes seules, 1 $ par point.
+- **La ville** grandit avec le total des ventes de toutes les parties : Pompe, Forge, Auberge, Banque, Observatoire ; chaque bâtiment donne +5 % aux ventes et se dessine à la surface.
+- **Les paliers** : tous les 30 m, la première fois dans une partie, une prime (profondeur × 5 $).
+- **Les reliques** (une par tranche de 40 m : vieille lampe, pioche rouillée, pièce ancienne, statuette, crâne de bête, œuf de pierre) se vendent cher et restent dans la collection.
+- **La créature** dort dans une grotte tout au fond (240 m) : la trouver paie 5 000 $ et donne un **prestige** ; chaque prestige rend les minerais 30 % plus chers dans les parties suivantes, avec un peu plus de gaz et de rochers.
+
 ## Commandes
 
 - **Flèches** ou **ZQSD** : avancer et creuser à gauche, à droite ou vers le bas.

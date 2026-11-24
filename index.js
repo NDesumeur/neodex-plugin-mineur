@@ -1,13 +1,13 @@
 // Mineur : Creuse toujours plus bas avec ta foreuse, remonte les minerais, vends-les à la surface et améliore ta machine. Gare au carburant et à la lave.
 // Jeu NeoDex en pixel art dessiné à la main (police bitmap, cadres et boutons en pixels). Il tourne dans le bac à sable de NeoDex.
 const HTML = `<div class="appWrap wide">
-  <div class="agHead"><span class="label">Mineur</span><span class="hint">Flèches ou ZQSD : avancer et creuser · ↑ : remonter (consomme) · 1 2 3 : améliorations (à la surface)</span></div>
+  <div class="agHead"><span class="label">Mineur</span><span class="hint">Flèches ou ZQSD : avancer et creuser · ↑ : remonter (consomme) · 1 à 5 : améliorations (à la surface)</span></div>
   <div class="gMain"><div class="gameBox"><canvas id="gc" width="240" height="204"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="gStats"></div></div>
       <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button><button class="btn" id="gFs">PLEIN ÉCRAN</button></div>
-      <div class="row"><button class="btn" id="mnUp0">RÉSERVOIR</button><button class="btn" id="mnUp1">SOUTE</button></div><div class="row"><button class="btn" id="mnUp2">FORET</button></div>
-      <div class="hint">À la surface, tout se vend et le plein se fait tout seul.</div><div class="hint">Plus on descend, plus les minerais valent cher : cuivre, fer, argent, or, rubis, saphir, puis sous 90 m émeraude, améthyste, diamant, mithril et étoilite. La roche dure demande un meilleur foret, la roche noire (sous 100 m) un foret 3 au moins ; la lave renvoie à la surface en perdant la soute.</div>
+      <div class="row"><button class="btn" id="mnUp0">RÉSERVOIR</button><button class="btn" id="mnUp1">SOUTE</button></div><div class="row"><button class="btn" id="mnUp2">FORET</button><button class="btn" id="mnUp3">COQUE</button></div><div class="row"><button class="btn" id="mnUp4">MOTEUR</button></div>
+      <div class="hint">À la surface, tout se vend, le plein et les réparations se font tout seuls ; chaque vente fait grandir la ville (+5 % aux ventes par bâtiment). Gare au gaz caché dans la terre, aux rochers qui tombent et aux longues chutes : ils abîment la coque. Tous les 30 m, un palier paie une prime ; des reliques dorment dans la mine, et une créature tout au fond.</div><div class="hint">Plus on descend, plus les minerais valent cher : cuivre, fer, argent, or, rubis, saphir, puis sous 90 m émeraude, améthyste, diamant, mithril et étoilite. La roche dure demande un meilleur foret, la roche noire (sous 100 m) un foret 3 au moins ; la lave renvoie à la surface en perdant la soute.</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
@@ -351,7 +351,12 @@ const MN_ORES = [{n: 'Cuivre', v: 5, c: '#e08a4a', d: 0}, {n: 'Fer', v: 12, c: '
 const MN_LAYERS = [{d: 0, n: 'La terre', c: ['#6a4428', '#7a5030', '#55361e']}, {d: 45, n: 'L\'argile rouge', c: ['#6a3024', '#7a3a2a', '#52221a']}, {d: 90, n: 'La pierre bleue', c: ['#3a4058', '#465070', '#2c3046']},
   {d: 150, n: 'Les cristaux', c: ['#3a2a58', '#4a3670', '#2a1e44']}, {d: 200, n: 'Le cœur du monde', c: ['#2a1a1a', '#3a2020', '#1e1010']}];
 const mnLayer = depth => MN_LAYERS.reduce((a, L, i) => depth >= L.d ? i : a, 0);
-const mns = gstore('mineur', {deep: 0, cash: 0});
+const mns = gstore('mineur', {deep: 0, cash: 0}); mns.sold ??= 0; mns.relics ??= []; mns.prestige ??= 0;
+const MN_RELICS = ['Vieille lampe', 'Pioche rouillée', 'Pièce ancienne', 'Statuette', 'Crâne de bête', 'Œuf de pierre'];  // une par tranche de 40 m
+// la ville grandit avec le total des ventes : chaque bâtiment donne +5 % aux ventes
+const MN_TOWN = [[0, 'Boutique'], [400, 'Pompe'], [1500, 'Forge'], [5000, 'Auberge'], [12000, 'Banque'], [30000, 'Observatoire']];
+const mnTown = () => MN_TOWN.filter(([s]) => mns.sold >= s).length - 1;
+const MN_CAVE = {x0: 8, x1: 12};  // la grotte de la créature, sur les trois dernières rangées
 let mn = null;
 // 0 vide, 1 terre, 2 roche dure, 3 lave, 4 roche noire (foret 3 au moins), 10+i minerai i
 function mnWorld(seed) {
@@ -361,58 +366,117 @@ function mnWorld(seed) {
     const rock = Math.min(.04 + depth / 500, .22), lava = depth > 30 ? Math.min(.02 + depth / 1800, .1) : 0;  // la lave venait après la roche et n'apparaissait jamais : elle a maintenant sa part
     if (k < rock) w[y][x] = depth >= 100 && r() < .5 ? 4 : 2; else if (k < rock + lava) w[y][x] = 3; else if (k < rock + lava + .24) { const ok = MN_ORES.map((o, i) => [o, i]).filter(([o]) => depth >= o.d); const [, i] = ok[Math.floor(Math.pow(r(), .7) * ok.length)]; w[y][x] = 10 + i; }
     if (k > .97) w[y][x] = 0;  // des poches vides
+    const dz = 1 + .25 * mns.prestige, q = r();  // chaque prestige ajoute des dangers
+    if (w[y][x] === 1 && depth > 20 && q < .03 * dz) w[y][x] = 5; else if (w[y][x] === 1 && depth > 15 && q < .045 * dz) w[y][x] = 6; else if (w[y][x] === 1 && depth > 30 && q > .9965) w[y][x] = 7;
   }
+  for (let y = MN.ROWS - 3; y < MN.ROWS; y++) for (let x = MN_CAVE.x0; x <= MN_CAVE.x1; x++) w[y][x] = 0;
   return w;
 }
 function mnNew() {
-  mn = Object.assign(mn || {tick: 0, raf: 0}, {mode: 'play', w: mnWorld(Math.floor(Math.random() * 1e9)), x: 4, y: MN.SURF - 1, fx: 4, fy: MN.SURF - 1, tank: 60, fuel: 60, hold: 8, bag: [], drill: 1, cash: 0, deep: 0, dig: null, msg: '', msgAt: -999, fall: 0, keys: {}, lastMove: 0, cam: 0, layer: 0});
+  mn = Object.assign(mn || {tick: 0, raf: 0}, {mode: 'play', w: mnWorld(Math.floor(Math.random() * 1e9)), x: 4, y: MN.SURF - 1, fx: 4, fy: MN.SURF - 1, tank: 60, fuel: 60, hold: 8, bag: [], drill: 1, hull: 60, hp: 60, eng: 1, relicBag: [], fallN: 0, marks: [], rocks: new Map(), puffs: [], found: false, sale: null, hurtAt: -999, pmul: 1 + .3 * mns.prestige, cash: 0, deep: 0, dig: null, msg: '', msgAt: -999, fall: 0, keys: {}, lastMove: 0, cam: 0, layer: 0});
   mnInfo();
 }
 const mnSay = t => { mn.msg = t; mn.msgAt = mn.tick; };
-const MN_UP = [['Réservoir', 'tank', 30, t => 40 + t * 2], ['Soute', 'hold', 4, h => 30 + h * 6], ['Foret', 'drill', 1, d => 150 * d * d]], MN_DRILL = 5, MN_HOLD = 24;
+const MN_UP = [['Réservoir', 'tank', 30, t => 40 + t * 2], ['Soute', 'hold', 4, h => 30 + h * 6], ['Foret', 'drill', 1, d => 150 * d * d], ['Coque', 'hull', 30, h => 40 + h * 2], ['Moteur', 'eng', 1, e => 200 * e * e]], MN_DRILL = 5, MN_HOLD = 24;
+const MN_MAX = {drill: MN_DRILL, hold: MN_HOLD, hull: 240, eng: 4}, mnMaxed = key => mn[key] >= (MN_MAX[key] ?? Infinity);
+function mnHurt(n, why) {  // la coque prend un coup ; à zéro, les secours remontent la foreuse
+  mn.hp -= n; mn.hurtAt = mn.tick; mnSounds++; beep(120, .2, 'sawtooth', 50, .07); mnNoise(.15, .08, 900);
+  if (mn.hp <= 0) { mn.hp = 0; mnRescue('Coque détruite'); mn.hp = Math.ceil(mn.hull / 2); } else mnSay(why + ' : coque -' + n);
+}
 function mnBuy(i) {
   const [name, key, add, cost] = MN_UP[i], price = Math.round(cost(mn[key]));
-  if (key === 'drill' && mn.drill >= MN_DRILL) return mnSay('Foret au maximum');
-  if (key === 'hold' && mn.hold >= MN_HOLD) return mnSay('Soute au maximum');
+  if (mnMaxed(key)) return mnSay(name + ' au maximum');
   if (mn.y >= MN.SURF) return mnSay('Les achats se font à la surface');
   if (mn.cash < price) return mnSay(name + ' : il faut ' + price + ' $');
-  mn.cash -= price; mn[key] += add; if (key === 'tank') mn.fuel = mn.tank; beep(880, .1, 'triangle', 1320, .07); mnSay(name + ' amélioré !'); mnInfo();
+  mn.cash -= price; mn[key] += add; if (key === 'tank') mn.fuel = mn.tank; if (key === 'hull') mn.hp = mn.hull; beep(880, .1, 'triangle', 1320, .07); mnSay(name + ' amélioré !'); mnInfo();
 }
 function mnSurface() {  // à la surface : on vend tout et on refait le plein
-  if (mn.bag.length) { const v = mn.bag.reduce((a, i) => a + MN_ORES[i].v, 0); mn.cash += v; mnSay('Vendu : ' + v + ' $'); mnCashSound(mn.bag.length); mn.bag = []; }
+  if (mn.bag.length || mn.relicBag.length) {
+    const tl = mnTown(), mul = mn.pmul * (1 + tl * .05), rows = [];
+    MN_ORES.forEach((o, i) => { const n = mn.bag.filter(b => b === i).length; if (n) rows.push([o.n, n, Math.round(n * o.v * mul)]); });
+    for (const r of mn.relicBag) rows.push([r.n, 1, Math.round(r.v * mul)]);
+    const v = rows.reduce((a, r) => a + r[2], 0); mn.cash += v; mns.sold += v; const tl2 = mnTown();
+    mn.sale = {rows, v, mul, at: mn.tick, town: tl2 > tl ? MN_TOWN[tl2][1] : ''};
+    mnSay(mn.sale.town ? 'La ville grandit : ' + mn.sale.town : 'Vendu : ' + v + ' $'); mnCashSound(mn.bag.length + mn.relicBag.length); mn.bag = []; mn.relicBag = [];
+  }
   const need = Math.ceil(mn.tank - mn.fuel), pay = Math.min(need, mn.cash); if (pay > 0) { mn.cash -= pay; mn.fuel += pay; for (let i = 0; i < 4; i++) setTimeout(() => beep(180 + i * 40, .07, 'sine', 120, .04), 700 + i * 90); }  // le plein : glou-glou
+  const fix = Math.min(mn.hull - mn.hp, mn.cash); if (fix > 0) { mn.cash -= fix; mn.hp += fix; }  // les réparations : 1 $ par point de coque
   if (mn.fuel < 3 && mn.cash <= 0) mn.fuel = 20;  // jamais bloqué en haut sans rien
   if (mn.cash > mns.cash) mns.cash = mn.cash; saveGames(); mnInfo();
 }
-function mnRescue(why) { mn.bag = []; mn.x = 4; mn.y = MN.SURF - 1; mn.fx = mn.x; mn.fy = mn.y; mn.fuel = Math.max(15, mn.fuel); mn.cash = Math.max(0, mn.cash - 25); mnSay(why + ' : secours, -25 $, soute perdue'); beep(140, .5, 'sawtooth', 60, .08); mnInfo(); }
+function mnRescue(why) { mn.bag = []; mn.relicBag = []; mn.fallN = 0; mn.dig = null; mn.x = 4; mn.y = MN.SURF - 1; mn.fx = mn.x; mn.fy = mn.y; mn.fuel = Math.max(15, mn.fuel); mn.cash = Math.max(0, mn.cash - 25); mnSay(why + ' : secours, -25 $, soute perdue'); beep(140, .5, 'sawtooth', 60, .08); mnInfo(); }
 function mnTry(dx, dy) {
   const nx = mn.x + dx, ny = mn.y + dy; if (nx < 0 || nx >= MN.COLS || ny < 0 || ny >= MN.ROWS) return;
   const t = mn.w[ny][nx];
   if (dy < 0 && t !== 0) return;  // on ne creuse pas vers le haut
-  if (t === 0) { if (dy < 0) { if (mn.fuel < .5) return; mn.fuel -= .5; } mn.x = nx; mn.y = ny; return; }
+  if (t === 0) { if (dy < 0) { if (mn.fuel < .5) return; mn.fuel -= .5; mn.fallN = 0; } mn.x = nx; mn.y = ny; return; }
   if (t === 3) { mn.w[ny][nx] = 0; return mnRescue('La lave'); }
   if (mn.fuel < 1) return mnRescue('Panne sèche');
   if (t === 4 && mn.drill < 3) { beep(110, .12, 'square', 0, .05); return mnSay('Roche noire : il faut un foret 3'); }
-  const hard = t === 2 ? Math.max(1, 4 - mn.drill) : t === 4 ? Math.max(1, 7 - mn.drill) : 1;
-  mn.dig = {x: nx, y: ny, n: 0, need: hard * 8, hard}; mn.fuel -= hard;
+  const hard = t === 2 || t === 6 ? Math.max(1, 4 - mn.drill) : t === 4 ? Math.max(1, 7 - mn.drill) : 1;
+  mn.dig = {x: nx, y: ny, n: 0, need: hard * (9 - mn.eng), hard}; mn.fuel -= hard;
 }
 function mnUpdate() {
   const m = mn;
-  if (m.dig) { if (m.dig.n % 5 === 0) mnGrind(m.dig.hard); if (++m.dig.n >= m.dig.need) { const t = m.w[m.dig.y][m.dig.x]; if (t >= 10) { if (m.bag.length < m.hold) { m.bag.push(t - 10); beep(600 + (t - 10) * 90, .05, 'square', 0, .05); beep(900 + (t - 10) * 120, .08, 'triangle', 0, .04); } else mnSay('Soute pleine : remonte vendre'); } else beep(160 + Math.random() * 60, .03, 'square', 0, .04); m.w[m.dig.y][m.dig.x] = 0; m.x = m.dig.x; m.y = m.dig.y; m.dig = null; } }
-  else if (m.y + 1 < MN.ROWS && m.w[m.y + 1][m.x] === 0 && !m.keys.up) { if (++m.fall >= 4) { m.y++; m.fall = 0; } }
-  else if (m.tick - m.lastMove >= 7) { const k = m.keys, d = k.left ? [-1, 0] : k.right ? [1, 0] : k.down ? [0, 1] : k.up ? [0, -1] : null; if (d) { mnTry(...d); m.lastMove = m.tick; } }
+  if (m.dig) { if (m.dig.n % 5 === 0) mnGrind(m.dig.hard); if (++m.dig.n >= m.dig.need) { const t = m.w[m.dig.y][m.dig.x]; if (t >= 10) { if (m.bag.length < m.hold) { m.bag.push(t - 10); beep(600 + (t - 10) * 90, .05, 'square', 0, .05); beep(900 + (t - 10) * 120, .08, 'triangle', 0, .04); } else mnSay('Soute pleine : remonte vendre'); } else if (t === 7) mnRelic(m.dig.y); else beep(160 + Math.random() * 60, .03, 'square', 0, .04); if (t === 5) { for (let i = 0; i < 8; i++) m.puffs.push({x: m.dig.x * MN.T + 6, y: m.dig.y * MN.T + 6, vx: Math.random() * 1.2 - .6, vy: -Math.random() * .8, t: 50}); } m.w[m.dig.y][m.dig.x] = 0; m.x = m.dig.x; m.y = m.dig.y; m.dig = null; if (t === 5) mnHurt(25, 'Gaz'); } }
+  else if (m.y + 1 < MN.ROWS && m.w[m.y + 1][m.x] === 0 && !m.keys.up) { if (++m.fall >= 4) { m.y++; m.fall = 0; m.fallN++; } }
+  else if (m.fallN && mnLand()) {}
+  else if (m.tick - m.lastMove >= 8 - m.eng) { const k = m.keys, d = k.left ? [-1, 0] : k.right ? [1, 0] : k.down ? [0, 1] : k.up ? [0, -1] : null; if (d) { mnTry(...d); m.lastMove = m.tick; } }
   m.fx += (m.x - m.fx) * .35; m.fy += (m.y - m.fy) * .35;
   const depth = Math.max(0, m.y - MN.SURF + 1), ly = mnLayer(depth); if (ly > m.layer) { m.layer = ly; mnSay(MN_LAYERS[ly].n + ' : ' + depth + ' m'); [392, 523, 659].forEach((f, i) => setTimeout(() => beep(f, .15, 'triangle', 0, .05), i * 110)); }
+  const mk = Math.floor(depth / 30) * 30; if (mk > 0 && !m.marks.includes(mk)) { m.marks.push(mk); const b = Math.round(mk * 5 * m.pmul); m.cash += b; mnSay(m.tick - m.msgAt < 60 ? m.msg + ' · +' + b + ' $' : 'PALIER ' + mk + ' m : +' + b + ' $'); beep(784, .1, 'triangle', 1175, .05); }
+  if (!m.found && m.y >= MN.ROWS - 3 && m.x >= MN_CAVE.x0 && m.x <= MN_CAVE.x1) mnCreature();
+  if (m.tick % 8 === 0) mnRocks();
+  for (const p of m.puffs) { p.x += p.vx; p.y += p.vy; p.t--; } m.puffs = m.puffs.filter(p => p.t > 0);
   if (depth > m.deep) { m.deep = depth; if (depth > mns.deep) { mns.deep = depth; saveGames(); } mnInfo(); }
   if (m.y < MN.SURF && !m.wasUp) mnSurface(); m.wasUp = m.y < MN.SURF;
   if (m.fuel <= 0 && m.y >= MN.SURF && !m.dig) mnRescue('Panne sèche');
   m.cam += (Math.max(0, m.fy - 6) - m.cam) * .15;
+}
+function mnLand() {  // à l'atterrissage : plus de 3 cases de chute abîment la coque
+  const n = mn.fallN; mn.fallN = 0; if (n >= 4) mnHurt((n - 3) * 6, 'Chute'); return false;
+}
+function mnRocks() {  // les rochers sans appui tremblent un instant, puis tombent ; sur la foreuse, ils abîment la coque
+  const m = mn, y1 = Math.min(MN.ROWS - 2, Math.floor(m.cam) + MN.VIEW + 3);
+  for (let y = y1; y >= Math.max(MN.SURF, Math.floor(m.cam) - 3); y--) for (let x = 0; x < MN.COLS; x++) {
+    if (m.w[y][x] !== 6) continue; const k = x + ',' + y;
+    if (m.w[y + 1][x] !== 0 || (m.dig && m.dig.x === x && m.dig.y === y)) { m.rocks.delete(k); continue; }
+    const n = (m.rocks.get(k) || 0) + 1; m.rocks.delete(k); if (n === 1) beep(70, .25, 'sine', 50, .04);
+    if (n < 4) { m.rocks.set(k, n); continue; }  // le rocher tremble un peu plus d'une demi-seconde
+    m.w[y][x] = 0;
+    if (x === m.x && y + 1 === m.y) { mnNoise(.2, .1, 500); mnHurt(30, 'Éboulement'); continue; }  // le rocher se brise sur la foreuse
+    m.w[y + 1][x] = 6; m.rocks.set(x + ',' + (y + 1), n);
+  }
+}
+function mnRelic(y) {  // une relique par tranche de 40 m : elle se vend cher et reste dans la collection
+  const depth = y - MN.SURF + 1, n = MN_RELICS[Math.min(MN_RELICS.length - 1, Math.floor(depth / 40))];
+  mn.relicBag.push({n, v: 300 + depth * 15}); const nw = !mns.relics.includes(n); if (nw) { mns.relics.push(n); saveGames(); }
+  mnSay('Relique : ' + n + (nw ? ' (nouvelle !)' : '')); [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, .12, 'triangle', 0, .05), i * 90)); mnSounds++; mnInfo();
+}
+function mnCreature() {  // tout au fond, la créature : une grosse prime et un prestige pour la partie suivante
+  mn.found = true; const b = Math.round(5000 * mn.pmul); mn.cash += b; mns.prestige++; saveGames();
+  mnSay('La créature ! +' + b + ' $ · prestige ' + mns.prestige); [262, 330, 392, 523, 659].forEach((f, i) => setTimeout(() => beep(f, .3, 'triangle', 0, .06), i * 140)); mnSounds++; mnInfo();
 }
 const MN_DIRTS = MN_LAYERS.map(L => [0, 1, 2].map(v => cnv(12, 12, b => { const r = seeded(v + 3); px(b, L.c[0], 0, 0, 12, 12); for (let i = 0; i < 12; i++) px(b, r() < .5 ? L.c[1] : L.c[2], Math.floor(r() * 12), Math.floor(r() * 12), 2, 1); }))), MN_DIRT = MN_DIRTS[0];
 const MN_BLACK = cnv(12, 12, b => { px(b, '#141018', 0, 0, 12, 12); px(b, '#2a2434', 1, 1, 4, 3); px(b, '#221c2c', 6, 5, 5, 6); px(b, '#05010b', 0, 4, 6, 1); px(b, '#05010b', 5, 4, 1, 8); px(b, '#4a4058', 2, 1, 1, 1); px(b, '#4a4058', 8, 6, 1, 1); });
 const MN_ROCK = cnv(12, 12, b => { px(b, '#4a4a5a', 0, 0, 12, 12); px(b, '#6a6a7a', 1, 1, 5, 4); px(b, '#5a5a6a', 6, 6, 5, 5); px(b, '#2a2a3a', 0, 5, 7, 1); px(b, '#2a2a3a', 6, 5, 1, 7); px(b, '#8a8a9a', 2, 1, 2, 1); });
 const MN_LAVA = [0, 1].map(f => cnv(12, 12, b => { px(b, '#c02a10', 0, 0, 12, 12); for (let i = 0; i < 6; i++) px(b, '#ffa030', (i * 5 + f * 3) % 11, (i * 7 + f * 2) % 11, 2, 1); px(b, '#ffe080', 3 + f * 4, 5, 1, 1); }));
 const MN_ORE = MN_ORES.map((o, i) => cnv(12, 12, b => { const big = i >= 6; for (const [x, y] of big ? [[2, 2], [7, 3], [3, 7], [8, 8], [5, 5]] : [[2, 3], [7, 2], [4, 7], [8, 8]]) { px(b, '#05010b', x - 1, y - 1, 4, 4); px(b, o.c, x, y, 2, 2); px(b, '#ffffff', x, y, 1, 1); } if (big) { px(b, o.c, 5, 4, 1, 1); px(b, o.c, 4, 5, 1, 1); } }));  // les minerais profonds : cinq éclats
+const MN_BOULDER = cnv(12, 12, b => { px(b, '#05010b', 1, 1, 10, 10); px(b, '#05010b', 2, 0, 8, 12); px(b, '#05010b', 0, 2, 12, 8); px(b, '#7a7a8a', 2, 1, 8, 10); px(b, '#7a7a8a', 1, 2, 10, 8); px(b, '#9a9aaa', 3, 2, 4, 3); px(b, '#5a5a6a', 6, 7, 4, 3); px(b, '#c8c8d8', 3, 2, 1, 1); });
+const MN_RELIC = cnv(12, 12, b => { px(b, '#05010b', 2, 3, 8, 7); px(b, '#a8782a', 3, 4, 6, 5); px(b, '#e8b84a', 3, 4, 6, 2); px(b, '#05010b', 5, 6, 2, 1); px(b, '#ffe8a0', 4, 4, 1, 1); });
+// la créature du fond : une grande salamandre de pierre, de profil (un seul œil), des cristaux sur le dos
+const MN_BEAST = [0, 1].map(open => cnv(60, 31, b => {
+  const body = (c, o) => { const R = (x, y, w, h) => px(b, c, x - o, y - o, w + 2 * o, h + 2 * o);
+    for (let x = 1; x < 17; x++) R(x, 25 - Math.round(x / 3), 1, 2 + Math.round(x / 3));  // la queue qui s'affine
+    for (let j = -8; j <= 8; j++) { const hw = Math.round(16 * Math.sqrt(1 - (j / 9) ** 2)); R(32 - hw, 19 + j, hw * 2, 1); }
+    R(44, 9, 12, 12); R(52, 14, 7, 7); R(21, 26, 6, 4); R(38, 26, 6, 4); };
+  body('#05010b', 1); body('#4a2a6a', 0);
+  for (let j = 3; j <= 7; j++) { const hw = Math.round(14 * Math.sqrt(1 - (j / 9) ** 2)); px(b, '#7a5a9a', 32 - hw, 19 + j, hw * 2, 1); }  // le ventre plus clair
+  px(b, '#6a4a8a', 46, 10, 8, 2); px(b, '#6a4a8a', 22, 12, 18, 2);
+  for (const x of [20, 28, 36]) { px(b, '#05010b', x - 1, 7, 5, 6); px(b, '#8ae8e0', x, 8, 3, 4); px(b, '#d8ffff', x, 8, 1, 1); }
+  px(b, '#05010b', 57, 16, 1, 1);  // la narine
+  if (open) { px(b, '#05010b', 48, 12, 5, 5); px(b, '#ffe8a0', 49, 13, 3, 3); px(b, '#05010b', 50, 14, 1, 2); } else px(b, '#05010b', 48, 14, 5, 1);
+}));
 const MN_RIG = spr(['...kkkk.....', '..kyyyyk....', '..kywwyk....', 'kkkyyyykkk..', 'kyyyyyyyyykk', 'kyoyyyyyyyGk', 'kkkkkkkkkkGk', '.kGk..kGk.k.', '.kkk..kkk...'], {k: '#05010b', y: '#ffd84a', w: '#8ad8ff', o: '#ff9a3d', G: '#8a8aa8'});
 function mnDraw() {
   const m = mn, oy = Math.round(m.cam * MN.T), r0 = Math.floor(m.cam), top = 22;
@@ -422,31 +486,57 @@ function mnDraw() {
     if (ry < MN.SURF) { px(g, ry === MN.SURF - 1 ? '#2a3a6a' : '#1a2450', X, Y, MN.T, MN.T); continue; }
     if (t === 0) { px(g, '#120a06', X, Y, MN.T, MN.T); if (m.w[ry - 1]?.[x] && ry > MN.SURF) px(g, '#0a0604', X, Y, MN.T, 2); continue; }
     const dirt = MN_DIRTS[mnLayer(ry - MN.SURF + 1)][(x * 7 + ry * 3) % 3];
-    if (t === 1 || t >= 10) g.drawImage(dirt, X, Y);
+    if (t === 1 || t >= 10 || t === 5 || t === 7) g.drawImage(dirt, X, Y);
+    if (t === 5) { if ((m.tick + x * 17 + ry * 5) % 120 < 50) px(g, '#7ac84a', X + 3 + (x + ry) % 5, Y + 3 + ry % 4, 2, 2); continue; }  // le gaz : de petites bulles vertes, de temps en temps
+    if (t === 7) { g.drawImage(MN_RELIC, X, Y); if ((m.tick + x * 11) % 70 < 8) px(g, '#ffffff', X + 9, Y + 2, 1, 1); continue; }
+    if (t === 6) { const sh = m.rocks.has(x + ',' + ry) ? (m.tick % 4 < 2 ? 1 : -1) : 0; g.drawImage(dirt, X, Y); g.drawImage(MN_BOULDER, X + sh, Y); continue; }
     if (t >= 10) { g.drawImage(MN_ORE[t - 10], X, Y); if (t >= 16 && (m.tick + x * 13 + ry * 7) % 90 < 6) px(g, '#ffffff', X + 5, Y + 4, 1, 3), px(g, '#ffffff', X + 4, Y + 5, 3, 1); }  // les pierres précieuses scintillent
     else if (t !== 1) g.drawImage(t === 2 ? MN_ROCK : t === 3 ? MN_LAVA[Math.floor(m.tick / 15 + x) % 2] : MN_BLACK, X, Y);
     if (ry === MN.SURF) px(g, '#3a8a3a', X, Y, MN.T, 3);
   }
+  { const by = top + MN.ROWS * MN.T - oy; if (by < H) { px(g, '#0c0608', 0, by, W, H - by); for (let x = 0; x < W; x += 6) px(g, '#1e1216', x + (x % 12 ? 2 : 0), by + 3 + (x % 18) / 3, 3, 2); } }
   // la surface : la boutique et le dépôt de carburant
   const sy = top + (MN.SURF - 1) * MN.T - oy;
   if (sy > top - 30) { px(g, '#05010b', 150, sy - 14, 40, 26); px(g, '#8a5428', 151, sy - 13, 38, 24); px(g, '#ff4a5a', 151, sy - 13, 38, 5); pxFont(g, '$', 170, sy + 6, '#ffd84a', 8, 'center'); px(g, '#05010b', 200, sy - 6, 14, 18); px(g, '#c02a2a', 201, sy - 5, 12, 16); px(g, '#ffffff', 204, sy - 2, 6, 2); }
+  if (sy > top - 30) for (let i = 1; i <= mnTown(); i++) {  // la ville : un bâtiment de plus à chaque palier de ventes
+    const bx = 2 + (i - 1) * 24 + (i > 2 ? 26 : 0), bh = 12 + i * 2, roof = ['#4a8ad8', '#c84a3a', '#8a5aa8', '#d8a83a', '#3aa8a8'][i - 1];
+    px(g, '#05010b', bx, sy + 12 - bh, 20, bh); px(g, '#6a5040', bx + 1, sy + 13 - bh, 18, bh - 1); px(g, roof, bx, sy + 10 - bh, 20, 4);
+    px(g, '#ffd84a', bx + 4, sy + 16 - bh, 4, 3); px(g, '#ffd84a', bx + 12, sy + 16 - bh, 4, 3); px(g, '#2a1a10', bx + 8, sy + 6, 4, 6);
+  }
+  const cy = top + (MN.ROWS - 3) * MN.T - oy;
+  if (cy < H) {  // la créature endormie tout au fond (de profil, un seul œil, qui s'ouvre quand on la trouve)
+    const cx = MN_CAVE.x0 * MN.T + 1, br = m.found ? 0 : Math.round(Math.sin(m.tick / 40) + 1) >> 1;
+    g.drawImage(MN_BEAST[m.found ? 1 : 0], cx, cy + 6 - br);
+    if (!m.found && m.tick % 120 < 60) pxFont(g, 'z', cx + 54, cy + 6 - (m.tick % 60) / 10, '#c8b8e8', 6);
+  }
+  for (const p of m.puffs) px(g, p.t > 25 ? '#9ae86a' : '#5a8a3a', Math.round(p.x), Math.round(top + p.y - oy), 3, 3);
   if (m.dig && m.tick % 4 < 2) px(g, '#ffd84a', m.dig.x * MN.T + 5, top + m.dig.y * MN.T - oy + 5, 2, 2);
-  const X = Math.round(m.fx * MN.T), Y = Math.round(top + m.fy * MN.T - oy) + 3; g.drawImage(MN_RIG, X, Y - (m.dig ? (m.tick % 4 < 2 ? 1 : 0) : 0));
+  const X = Math.round(m.fx * MN.T), Y = Math.round(top + m.fy * MN.T - oy) + 3; g.drawImage(MN_RIG, X, Y - (m.dig ? (m.tick % 4 < 2 ? 1 : 0) : 0)); if (m.tick - m.hurtAt < 20 && m.tick % 4 < 2) { g.globalAlpha = .5; px(g, '#ff2a2a', X, Y, 12, 9); g.globalAlpha = 1; }
   // le tableau de bord
   px(g, '#05010b', 0, 0, W, top - 1);
   pxFont(g, m.cash + ' $', 4, 9, '#ffd84a', 6); pxFont(g, 'prof. ' + Math.max(0, m.y - MN.SURF + 1) + ' m', 4, 18, '#c8b8a0', 6);
-  px(g, '#2a1a2a', 80, 4, 60, 5); px(g, m.fuel / m.tank > .25 ? '#5fdf6a' : '#ff4a5a', 80, 4, Math.round(60 * m.fuel / m.tank), 5); pxFont(g, 'carburant', 110, 18, '#8a7a6a', 6, 'center');
+  px(g, '#2a1a2a', 80, 3, 60, 4); px(g, m.fuel / m.tank > .25 ? '#5fdf6a' : '#ff4a5a', 80, 3, Math.round(60 * m.fuel / m.tank), 4);
+  px(g, '#2a1a2a', 80, 9, 60, 3); px(g, m.hp / m.hull > .3 ? '#8ab8e8' : '#ff4a5a', 80, 9, Math.round(60 * m.hp / m.hull), 3); pxFont(g, 'carbu · coque', 110, 18, '#8a7a6a', 6, 'center');
   for (let i = 0; i < m.hold; i++) { const o = m.bag[i]; px(g, o != null ? MN_ORES[o].c : '#2a1a2a', 150 + (i % 12) * 7, 4 + Math.floor(i / 12) * 7, 5, 5); }
+  if (m.sale && m.y < MN.SURF && m.tick - m.sale.at < 360) {  // le détail de la vente, et l'amélioration suivante
+    const s = m.sale, h = 30 + s.rows.length * 8 + (s.town ? 8 : 0), y0 = 66;
+    px(g, '#05010b', 28, y0 - 2, 184, h + 4); px(g, '#2a1a2a', 30, y0, 180, h); pxFont(g, 'VENTE', 120, y0 + 9, '#ffd84a', 6, 'center');
+    s.rows.forEach(([n, c, v], i) => { pxFont(g, n, 36, y0 + 18 + i * 8, '#e8d8c0', 6); pxFont(g, '×' + c, 140, y0 + 18 + i * 8, '#a89880', 6, 'right'); pxFont(g, v + ' $', 204, y0 + 18 + i * 8, '#ffd84a', 6, 'right'); });
+    let ly = y0 + 18 + s.rows.length * 8; if (s.town) { pxFont(g, 'Nouveau : ' + s.town, 120, ly, '#8ae88a', 6, 'center'); ly += 8; }
+    const nx = MN_UP.map(([n, k, , c], i) => [n, Math.round(c(m[k])), k]).filter(u => !mnMaxed(u[2])).sort((a, b) => a[1] - b[1])[0];
+    pxFont(g, 'Total ' + s.v + ' $' + (s.mul > 1.001 ? ' (×' + s.mul.toFixed(2) + ')' : ''), 120, ly + 2, '#ffffff', 6, 'center');
+    if (nx) pxFont(g, 'Ensuite : ' + nx[0] + ' ' + nx[1] + ' $', 120, ly + 10, m.cash >= nx[1] ? '#5fdf6a' : '#a89880', 6, 'center');
+  }
   if (m.tick - m.msgAt < 150) pxFont(g, m.msg, W / 2, H - 6, '#ffffff', 6, 'center');
 }
 const MN_KEYS = {ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'up', q: 'left', a: 'left', d: 'right', s: 'down', z: 'up', w: 'up'};
-document.addEventListener('keydown', e => { if (!keyOk(e) || !mn) return; const k = MN_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (k) { e.preventDefault(); if (!mn.keys[k]) mn.lastMove = -99; mn.keys[k] = true; } const b = '123'.indexOf(e.key); if (b >= 0) mnBuy(b); });
+document.addEventListener('keydown', e => { if (!keyOk(e) || !mn) return; const k = MN_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (k) { e.preventDefault(); if (!mn.keys[k]) mn.lastMove = -99; mn.keys[k] = true; } const b = '12345'.indexOf(e.key); if (b >= 0) mnBuy(b); });
 document.addEventListener('keyup', e => { if (!mn) return; const k = MN_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (k) mn.keys[k] = false; });
 cv.onpointerdown = e => { e.preventDefault(); if (!mn) return; const [x, y] = cpos(e), dx = x - (mn.x * MN.T + 6), dy = y - (22 + mn.y * MN.T - mn.cam * MN.T + 6); mn.keys = Math.abs(dx) > Math.abs(dy) ? {[dx < 0 ? 'left' : 'right']: true} : {[dy < 0 ? 'up' : 'down']: true}; mn.lastMove = -99; cv.setPointerCapture(e.pointerId); };
 cv.onpointerup = () => { if (mn) mn.keys = {}; };
 function mnInfo() {
-  showStats([['Plus profond', mns.deep + ' m'], ['Plus riche', mns.cash + ' $'], ['Cette partie', mn ? mn.deep + ' m · ' + mn.cash + ' $' : '—']]);
-  if (!mn) return; MN_UP.forEach(([name, key, , cost], i) => { const b = $('mnUp' + i); b.textContent = name.toUpperCase() + ' · ' + (key === 'drill' && mn.drill >= MN_DRILL || key === 'hold' && mn.hold >= MN_HOLD ? 'MAX' : Math.round(cost(mn[key])) + ' $'); });
+  const tl = mnTown(); showStats([['Plus profond', mns.deep + ' m'], ['Plus riche', mns.cash + ' $'], ['Cette partie', mn ? mn.deep + ' m · ' + mn.cash + ' $' : '—'], ['Ville', MN_TOWN[tl][1] + (tl ? ' · +' + tl * 5 + ' %' : '')], ['Reliques', mns.relics.length + ' / ' + MN_RELICS.length], ['Prestige', mns.prestige ? '★ ' + mns.prestige + ' · +' + mns.prestige * 30 + ' %' : '—']]);
+  if (!mn) return; MN_UP.forEach(([name, key, , cost], i) => { const b = $('mnUp' + i); b.textContent = name.toUpperCase() + ' · ' + (mnMaxed(key) ? 'MAX' : Math.round(cost(mn[key])) + ' $'); });
 }
 MN_UP.forEach((_, i) => $('mnUp' + i).onclick = () => { mnBuy(i); $('mnUp' + i).blur(); });
 $('gNew').onclick = () => { mnNew(); $('gNew').blur(); };
@@ -460,10 +550,24 @@ function mnCheck() {  // vérification : la mine descend à 240 m, les nouveaux 
   if (mnLayer(0) !== 0 || mnLayer(95) !== 2 || mnLayer(239) !== 4) bad.push('couches');
   const keep = mn; mn = null; mnNew(); mn.y = 120; mn.x = 5; mn.w[121][5] = 4; mn.drill = 2; mnTry(0, 1); if (mn.dig) bad.push('roche noire au foret 2'); mn.drill = 3; mnTry(0, 1); if (!mn.dig || mn.dig.hard !== 4) bad.push('roche noire au foret 3'); mn = keep;
   if (MN_HOLD > 24) bad.push('soute trop grande pour le tableau de bord');
+  { const keep2 = mn, sold = mns.sold, rel = [...mns.relics], pr = mns.prestige; mns.prestige = 0; mn = null; mnNew(); for (let y = 40; y < 76; y++) mn.w[y].fill(1);
+    if (!at(20, 240, t => t === 5) || !at(15, 240, t => t === 6) || at(0, 15, t => t === 5 || t === 6)) bad.push('gaz ou rochers mal placés');
+    if (w[MN.ROWS - 1][MN_CAVE.x0] !== 0) bad.push('pas de grotte au fond');
+    mn.x = 5; mn.y = 50; mn.w[51][5] = 5; mnTry(0, 1); while (mn.dig) mnUpdate(); if (mn.hp !== 35) bad.push('le gaz ne blesse pas : ' + mn.hp);
+    mn.hp = 60; mn.y = 50; mn.x = 6; mn.w[49][6] = 6; mn.w[50][6] = 0; mn.w[51][6] = 1; mn.cam = 44; for (let i = 0; i < 8; i++) mnRocks(); if (mn.hp !== 30) bad.push('le rocher ne tombe pas : ' + mn.hp);
+    mn.hp = 60; mn.x = 7; mn.y = 60; for (let y = 61; y < 66; y++) mn.w[y][7] = 0; mn.marks = [30, 60]; for (let i = 0; i < 80; i++) mnUpdate(); if (mn.y !== 65 || mn.hp !== 48) bad.push('chute : ' + mn.y + ' ' + mn.hp);
+    mn.cash = 1000; mn.y = 2; mn.hull = 60; mnBuy(3); if (mn.hull !== 90 || mn.hp !== 90) bad.push('coque');
+    mn.cash = 1000; mnBuy(4); if (mn.eng !== 2) bad.push('moteur'); mn.x = 4; mn.y = 2; mn.w[3][4] = 1; mnTry(0, 1); if (mn.dig?.need !== 7) bad.push('le moteur ne creuse pas plus vite');
+    mn.dig = null; mns.sold = 1500; mn.bag = [0, 0, 3]; mn.relicBag = [{n: 'Statuette', v: 1000}]; mn.cash = 0; mn.hp = mn.hull; mn.fuel = mn.tank; mnSurface();
+    if (mnTown() !== 2 || mn.sale?.v !== Math.round(10 * 1.1) + Math.round(70 * 1.1) + 1100 || mn.sale.rows.length !== 3) bad.push('vente : ' + JSON.stringify(mn.sale));
+    mn.hp = 10; mnSurface(); if (mn.hp !== mn.hull) bad.push('réparation');
+    mn.x = 10; mn.y = MN.ROWS - 1; mnCreature(); if (!mn.found || mns.prestige !== pr + 1) bad.push('créature');
+    mnNew(); if (Math.abs(mn.pmul - (1 + .3 * (pr + 1))) > 1e-9) bad.push('prestige');
+    mns.sold = sold; mns.relics = rel; mns.prestige = pr; mn = keep2; }
   return bad.length ? bad.join(', ') : 'ok';
 }
 console.assert(mnCheck() === 'ok', 'mineur', mnCheck());
-cv.__mn = {st: () => mn, check: mnCheck, sounds: () => mnSounds, layer: mnLayer, ores: MN_ORES};
+cv.__mn = {st: () => mn, check: mnCheck, update: () => mnUpdate(), surface: () => mnSurface(), sounds: () => mnSounds, layer: mnLayer, ores: MN_ORES};
 {  // vérification : le monde a de la terre sous la surface et des minerais plus chers en profondeur ; creuser coûte du carburant
   const w = mnWorld(5), deep = w.slice(70).flat().filter(t => t >= 10).map(t => MN_ORES[t - 10].v), top = w.slice(3, 12).flat().filter(t => t >= 10).map(t => MN_ORES[t - 10].v), avg = a => a.reduce((s, v) => s + v, 0) / a.length;
   const keep = mn; mn = null; mnNew(); const f0 = mn.fuel; mn.w[MN.SURF][4] = 1; mnTry(0, 1); const used = f0 - mn.fuel;

@@ -4,6 +4,16 @@ A drilling game: dig down into the ground with your drill rig, collect ores, bri
 
 *Version française : [README.md](README.md)*
 
+## The miner's loop (new in 1.2.0)
+
+- **Five upgrades** (keys 1 to 5, at the surface): tank, hold, drill, and now **hull** (the rig's hit points) and **engine** (you drive and dig faster, up to level 4).
+- **Hazards** damage the hull: **gas pockets** hidden in the dirt (small green bubbles give them away, -25), **boulders** that shake then fall when you dig under them (-30), and **falls** of more than three tiles. Hull at zero: rescue brings the rig back up and the hold is lost.
+- **Detailed sale**: when you come up, a table shows each ore sold, the total, the bonus, and the cheapest upgrade to buy next (green if you can afford it). Repairs happen by themselves, 1 $ per point.
+- **The town** grows with the total sales of all your games: Pump, Forge, Inn, Bank, Observatory; each building gives +5 % on sales and is drawn at the surface.
+- **Milestones**: every 30 m, the first time in a game, a bonus (depth × 5 $).
+- **Relics** (one per 40 m band: old lamp, rusty pickaxe, ancient coin, statuette, beast skull, stone egg) sell for a lot and stay in your collection.
+- **The creature** sleeps in a cave at the very bottom (240 m): finding it pays 5,000 $ and gives a **prestige**; each prestige makes ores 30 % more valuable in later games, with a little more gas and boulders.
+
 ## Controls
 
 - **Arrows** or **ZQSD** (WASD on QWERTY): move and dig left, right or down.
