@@ -299,6 +299,9 @@ export default async function (ctx) {
   const saveGames = () => { clearTimeout(gamesTimer); gamesTimer = setTimeout(() => { gamesTimer = null; folder.write('games', games).catch(() => {}); }, 500); };
   const best = (k, v) => { const b = games.best[k]; if (b == null || v > b) { games.best[k] = v; saveGames(); return true; } return false; };
   const gstore = (k, init) => (games[k] ??= init);
+  // les trophées de NeoDex (3.4.8 et plus) : succès et records déclarés dans plugin.json ; sur un NeoDex plus ancien, rien ne se passe
+  const trophy = id => { ctx.games?.unlock(id).catch(() => {}); };
+  const trophyRecord = (id, v) => { if (v != null && Number.isFinite(+v)) ctx.games?.record(id, +v).catch(() => {}); };
 function gameLoop(st, appKey, update, draw) {
   cancelAnimationFrame(st.raf);
   const STEP = 1000 / 60; let acc = 0, last = performance.now();
@@ -454,7 +457,7 @@ function mnRelic(y) {  // une relique par tranche de 40 m : elle se vend cher et
   mnSay('Relique : ' + n + (nw ? ' (nouvelle !)' : '')); [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, .12, 'triangle', 0, .05), i * 90)); mnSounds++; mnInfo();
 }
 function mnCreature() {  // tout au fond, la créature : une grosse prime et un prestige pour la partie suivante
-  mn.found = true; const b = Math.round(5000 * mn.pmul); mn.cash += b; mns.prestige++; saveGames();
+  mn.found = true; const b = Math.round(5000 * mn.pmul); mn.cash += b; mns.prestige++; mns.creature = 1; saveGames();
   mnSay('La créature ! +' + b + ' $ · prestige ' + mns.prestige); [262, 330, 392, 523, 659].forEach((f, i) => setTimeout(() => beep(f, .3, 'triangle', 0, .06), i * 140)); mnSounds++; mnInfo();
 }
 const MN_DIRTS = MN_LAYERS.map(L => [0, 1, 2].map(v => cnv(12, 12, b => { const r = seeded(v + 3); px(b, L.c[0], 0, 0, 12, 12); for (let i = 0; i < 12; i++) px(b, r() < .5 ? L.c[1] : L.c[2], Math.floor(r() * 12), Math.floor(r() * 12), 2, 1); }))), MN_DIRT = MN_DIRTS[0];
@@ -535,6 +538,7 @@ document.addEventListener('keyup', e => { if (!mn) return; const k = MN_KEYS[e.k
 cv.onpointerdown = e => { e.preventDefault(); if (!mn) return; const [x, y] = cpos(e), dx = x - (mn.x * MN.T + 6), dy = y - (22 + mn.y * MN.T - mn.cam * MN.T + 6); mn.keys = Math.abs(dx) > Math.abs(dy) ? {[dx < 0 ? 'left' : 'right']: true} : {[dy < 0 ? 'up' : 'down']: true}; mn.lastMove = -99; cv.setPointerCapture(e.pointerId); };
 cv.onpointerup = () => { if (mn) mn.keys = {}; };
 function mnInfo() {
+  setTimeout(mnTrophies);
   const tl = mnTown(); showStats([['Plus profond', mns.deep + ' m'], ['Plus riche', mns.cash + ' $'], ['Cette partie', mn ? mn.deep + ' m · ' + mn.cash + ' $' : '—'], ['Ville', MN_TOWN[tl][1] + (tl ? ' · +' + tl * 5 + ' %' : '')], ['Reliques', mns.relics.length + ' / ' + MN_RELICS.length], ['Prestige', mns.prestige ? '★ ' + mns.prestige + ' · +' + mns.prestige * 30 + ' %' : '—']]);
   if (!mn) return; MN_UP.forEach(([name, key, , cost], i) => { const b = $('mnUp' + i); b.textContent = name.toUpperCase() + ' · ' + (mnMaxed(key) ? 'MAX' : Math.round(cost(mn[key])) + ' $'); });
 }
@@ -573,6 +577,14 @@ cv.__mn = {st: () => mn, check: mnCheck, update: () => mnUpdate(), surface: () =
   const keep = mn; mn = null; mnNew(); const f0 = mn.fuel; mn.w[MN.SURF][4] = 1; mnTry(0, 1); const used = f0 - mn.fuel;
   console.assert(w[2].every(t => t === 0) && avg(deep) > avg(top) * 3 && used === 1 && mn.dig, 'mineur'); mn = keep;
 }
-ctx.onOpen(() => { if (!mn) mnNew(); gameLoop(mn, 'mineur', mnUpdate, mnDraw); mnInfo(); });
+// les trophées, tirés des statistiques et des records gardés (aussi à l'ouverture : ce qui a été fait avant compte)
+function mnTrophies() {  // appelée à chaque mise à jour du tableau : ne demande rien à NeoDex si rien n'a changé
+  const sig = [mns.deep, mns.cash, mns.relics.length, mnTown(), mns.creature].join(); if (sig === mnTrophies.sig) return; mnTrophies.sig = sig;
+  trophyRecord('profondeur', mns.deep || null); trophyRecord('fortune', mns.cash || null);
+  if (mns.deep >= 40) trophy('p40'); if (mns.deep >= 120) trophy('p120'); if (mns.deep >= 200) trophy('p200');
+  if (mns.relics.length >= 3) trophy('reliques3'); if (MN_RELICS.every(r => mns.relics.includes(r))) trophy('reliques');
+  if (mns.cash >= 10000) trophy('riche'); if (mns.cash >= 50000) trophy('tresor'); if (mnTown() >= MN_TOWN.length - 1) trophy('observatoire'); if (mns.creature) trophy('creature');
+}
+ctx.onOpen(() => { if (!mn) mnNew(); gameLoop(mn, 'mineur', mnUpdate, mnDraw); mnInfo(); mnTrophies(); });
 
 }
